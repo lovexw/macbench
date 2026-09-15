@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>macbench —— Mac 电池状态性能对比跑分</title>
+<meta name="description" content="零依赖的 shell 跑分脚本,对比电池正常与故障两种状态下 Mac 的真实性能。针对 Apple Silicon 与 Intel 分别设计,直接从本站下载,无需访问 GitHub。">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d21; --muted: #6b7280;
+    --accent: #2563eb; --accent-soft: #eff6ff; --border: #e5e7eb;
+    --code-bg: #1e293b; --code-text: #e2e8f0; --ok: #059669; --warn: #d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #171a21; --text: #e5e7eb; --muted: #9ca3af;
+      --accent: #60a5fa; --accent-soft: #1e293b; --border: #2a2f3a;
+      --code-bg: #0b0e14; --code-text: #d1d5db; --ok: #34d399; --warn: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 56px 0 32px; }
+  h1 { font-size: 2.2rem; letter-spacing: -0.02em; }
+  h1 .v { color: var(--accent); }
+  .tagline { color: var(--muted); font-size: 1.05rem; margin-top: 8px; }
+  .badges { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge {
+    font-size: .8rem; padding: 3px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid transparent;
+  }
+  section { margin: 40px 0; }
+  h2 { font-size: 1.35rem; margin-bottom: 16px; letter-spacing: -0.01em; }
+  h2::before { content: "§ "; color: var(--accent); }
+  p + p { margin-top: 10px; }
+  .muted { color: var(--muted); }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px;
+  }
+  .card h3 { font-size: 1.1rem; margin-bottom: 4px; }
+  .card .sub { color: var(--muted); font-size: .9rem; margin-bottom: 14px; }
+  .card ul { margin: 0 0 16px 1.2em; font-size: .95rem; }
+  .card li { margin: 4px 0; }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    border-radius: 10px; padding: 12px 14px; font-size: .85rem;
+    overflow-x: auto; line-height: 1.5;
+  }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  p code, li code {
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 5px; padding: 1px 6px; font-size: .85em;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .btn {
+    display: inline-block; background: var(--accent); color: #fff;
+    text-decoration: none; font-weight: 600; font-size: .95rem;
+    padding: 9px 18px; border-radius: 9px; transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn.ghost {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .btnrow { display: flex; gap: 10px; flex-wrap: wrap; }
+  .hash { font-size: .75rem; color: var(--muted); margin-top: 12px; word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--card); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .note {
+    background: var(--card); border-left: 3px solid var(--warn);
+    border-radius: 8px; padding: 14px 18px; margin-top: 16px; font-size: .93rem;
+  }
+  .note.ok { border-left-color: var(--ok); }
+  ol { margin-left: 1.4em; }
+  ol li { margin: 8px 0; }
+  footer { margin: 64px 0 40px; color: var(--muted); font-size: .85rem; text-align: center; }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>macbench<span class="v">.</span></h1>
+  <p class="tagline">Mac 电池状态性能对比跑分 —— 检测「坏电池拖慢整台电脑」</p>
+  <div class="badges">
+    <span class="badge">零依赖 · 只用 macOS 自带工具</span>
+    <span class="badge">开源 · 源码明文可审阅</span>
+    <span class="badge">不联网 · 不改系统设置</span>
+  </div>
+</header>
+
+<section>
+  <h2>这是什么</h2>
+  <p>电池故障的 Mac 即使插着充电器,macOS 也可能认为供电能力不足,把 CPU
+  限速到 50% 甚至更低、禁用睿频。本工具把<b>系统自报告的限速状态</b>和
+  <b>实际计算性能跑分</b>放在同一次运行里记录,在换电池前后各跑一次并对比,
+  就能用数据回答:「我的 Mac 变慢,是不是电池造成的?」</p>
+</section>
+
+<section>
+  <h2>我该下载哪个脚本</h2>
+  <p>在「终端」里执行:</p>
+  <pre><code>sysctl -n machdep.cpu.brand_string</code></pre>
+  <p>输出以 <code>Apple M</code> 开头(M1/M2/M3/M4)→ 下载 <b>Apple Silicon 版</b>;
+  否则(i5 / i7 / i9 等)→ 下载 <b>Intel 版</b>。选错了脚本会直接拒绝运行并提示,不会跑错。</p>
+</section>
+
+<section>
+  <h2>下载</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>🍎 Apple Silicon 版</h3>
+      <div class="sub">M1 / M2 / M3 / M4 · 约 20 KB</div>
+      <ul>
+        <li>性能核 / 能效核拓扑识别</li>
+        <li>30 秒<b>持续性能曲线</b>(区分「一直被限」和「跑久才降」)</li>
+        <li>QoS 调度优先派发性能核</li>
+      </ul>
+      <div class="btnrow">
+        <a class="btn" href="macbench-apple.sh" download>下载 macbench-apple.sh</a>
+      </div>
+      <p class="hash">SHA256<br>8b3f1a3ae767ae8ae3a0e53dce79f5349254c8a33ea61461f6a9f168a41d354f</p>
+    </div>
+    <div class="card">
+      <h3>💻 Intel 版</h3>
+      <div class="sub">Intel Core 芯片的 Mac · 约 15 KB</div>
+      <ul>
+        <li>标称 / 睿频频率基准对照</li>
+        <li>--freq 读取实际运行频率</li>
+        <li>XCPM 热节流等级观测</li>
+      </ul>
+      <div class="btnrow">
+        <a class="btn" href="macbench-intel.sh" download>下载 macbench-intel.sh</a>
+      </div>
+      <p class="hash">SHA256<br>30b33a63160ab5981d858ee34fc7d8c1caa43cb95b7a36edd25c306e4620e03b</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:16px">
+    也可以用 <b>curl</b> 直接下载(复制到终端执行):<br>
+    <pre style="margin-top:8px"><code># Apple Silicon (M1/M2/M3/M4)
+curl -fLO https://macbench.pages.dev/macbench-apple.sh
+
+# Intel
+curl -fLO https://macbench.pages.dev/macbench-intel.sh</code></pre>
+  </div>
+</section>
+
+<section>
+  <h2>使用方法</h2>
+  <ol>
+    <li>关掉浏览器、聊天软件等可关的程序,插好充电器;
+    <li><code>chmod +x macbench-apple.sh</code> 然后运行 <code>./macbench-apple.sh</code>(约 1 分钟,可选 <code>--freq</code> 需输密码);
+    <li>给这次测试起个名字,例如「坏电池接电源」;
+    <li><b>换电池之后</b>,在同样条件下再跑一次,命名如「换新电池后」;
+    <li>对比两次结果:
+    <pre style="margin-top:8px"><code>./macbench-apple.sh compare results/result_旧.txt results/result_新.txt</code></pre></li>
+  </ol>
+</section>
+
+<section>
+  <h2>如何判读结果</h2>
+  <table>
+    <tr><th>现象</th><th>结论</th></tr>
+    <tr><td>单核/多核比值 ≈ 0.50</td><td>性能被限制了一半,典型的无电池降频</td></tr>
+    <tr><td>多核比值明显低于单核比值</td><td>睿频被禁用,或部分核心被限制</td></tr>
+    <tr><td><code>CPU_SPEED_LIMIT &lt; 100</code></td><td><b>强证据</b>:macOS 明确报告了主动限速</td></tr>
+    <tr><td>内存带宽比值 ≈ 1.0</td><td>内存未被限制(正常,降频主要影响 CPU)</td></tr>
+    <tr><td>所有比值 ≈ 1.0 且无限速</td><td>两种状态性能无差别</td></tr>
+  </table>
+  <div class="note">
+    <b>严谨说明:</b><code>CPU_Speed_Limit &lt; 100</code> 是 macOS 自我报告的主动限速,属于强证据;
+    但反过来不成立 —— 该字段缺失或为 100% 时,<b>不能单独排除</b>其他形式的功耗/温度/频率管理。
+    Apple 版的持续性能曲线(<code>SUSTAIN_MIN_RATIO</code>)和 <code>--freq</code> 实际频率就是用来交叉验证的。
+  </div>
+  <div class="note">
+    <b>关于小幅差异:</b>分数有正常运行间波动,比值在 0.95~1.05 之间建议视为噪声。
+    像「正常 100 vs 异常 94」这种 -6% 的差异,需要先在同一状态连跑两次确认测试稳定后再下结论。
+    真正有意义的证据是数量级差异(如 100 → 51)配合系统自报告的限速字段。
+  </div>
+</section>
+
+<section>
+  <h2>安全性</h2>
+  <ul style="margin-left:1.4em">
+    <li>不安装任何软件,只用 macOS 自带的 <code>cc</code>、<code>pmset</code>、<code>ioreg</code>、<code>sysctl</code> 等系统工具;</li>
+    <li>唯一需要密码的是可选 <code>--freq</code> 模式,用 sudo 运行官方只读采样工具 <code>powermetrics</code>;</li>
+    <li>不联网、不修改任何系统设置,只写入脚本目录下的 <code>results/</code> 和系统临时目录(自动清理);</li>
+    <li>测试程序源码以明文嵌在脚本里,下载后可自行审阅,SHA256 校验值见上方。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>常见问题</h2>
+  <p><b>Q: M 系列上没有「标称最高频率」显示?</b><br>
+  Apple Silicon 不提供该系统值,Apple 版因此改用 P/E 拓扑 + 持续曲线 + 实际频率来判断,不依赖这个字段。</p>
+  <p><b>Q: 跑分和对比是同一台机器才有效吗?</b><br>
+  是。分数只用于同一台机器前后对比,跨机器比较没有意义。</p>
+  <p><b>Q: 为什么不用 Geekbench?</b><br>
+  Geekbench 更全面,但需要下载安装、分数受版本影响、不易脚本化对比。本脚本把限速状态和跑分绑定记录,直接输出比值。</p>
+</section>
+
+<footer>
+  macbench · 零依赖的 Mac 电池性能对比工具 ·
+  源码同时托管在 <a href="https://github.com/lovexw/macbench" rel="noopener">GitHub</a>(大陆访问不畅时请用本站直链)
+</footer>
+
+</div>
+</body>
+</html>
