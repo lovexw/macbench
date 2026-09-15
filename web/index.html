@@ -3,218 +3,548 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>macbench —— Mac 电池状态性能对比跑分</title>
-<meta name="description" content="零依赖的 shell 跑分脚本,对比电池正常与故障两种状态下 Mac 的真实性能。针对 Apple Silicon 与 Intel 分别设计,直接从本站下载,无需访问 GitHub。">
+<title>macbench · Mac 电池性能对比跑分工具</title>
+<meta name="description" content="零依赖的 shell 跑分脚本,检测「坏电池拖慢整台电脑」。针对 Apple Silicon 与 Intel 分别设计,本站直链下载,无需访问 GitHub。">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d21; --muted: #6b7280;
-    --accent: #2563eb; --accent-soft: #eff6ff; --border: #e5e7eb;
-    --code-bg: #1e293b; --code-text: #e2e8f0; --ok: #059669; --warn: #d97706;
+    --bg: #fafafa;
+    --bg-tint: #f1f3f7;
+    --card: #ffffff;
+    --text: #18181b;
+    --muted: #71717a;
+    --faint: #a1a1aa;
+    --line: #e4e4e7;
+    --accent: #0066d6;
+    --accent-hover: #0052ac;
+    --accent-soft: #eef5ff;
+    --code-bg: #16181d;
+    --code-edge: #2a2d34;
+    --code-text: #d7dbe2;
+    --code-dim: #7d8590;
+    --code-green: #7ee2a8;
+    --code-yellow: #f2cc60;
+    --ok: #0a7d4f;
+    --warn: #b45309;
+    --warn-bg: #fffbeb;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0f1115; --card: #171a21; --text: #e5e7eb; --muted: #9ca3af;
-      --accent: #60a5fa; --accent-soft: #1e293b; --border: #2a2f3a;
-      --code-bg: #0b0e14; --code-text: #d1d5db; --ok: #34d399; --warn: #fbbf24;
+      --bg: #0d0f13;
+      --bg-tint: #12151b;
+      --card: #16191f;
+      --text: #ececf1;
+      --muted: #9b9ba4;
+      --faint: #63636d;
+      --line: #262a33;
+      --accent: #4d9fff;
+      --accent-hover: #78b6ff;
+      --accent-soft: #16202e;
+      --code-bg: #0a0c10;
+      --code-edge: #23272f;
+      --code-text: #ccd2dc;
+      --code-dim: #667080;
+      --warn-bg: #201a10;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.35);
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; font-size: 16px;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
-  header { padding: 56px 0 32px; }
-  h1 { font-size: 2.2rem; letter-spacing: -0.02em; }
-  h1 .v { color: var(--accent); }
-  .tagline { color: var(--muted); font-size: 1.05rem; margin-top: 8px; }
-  .badges { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
-  .badge {
-    font-size: .8rem; padding: 3px 10px; border-radius: 999px;
-    background: var(--accent-soft); color: var(--accent); border: 1px solid transparent;
+  ::selection { background: var(--accent); color: #fff; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+  .mono, code, pre, kbd { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
   }
-  section { margin: 40px 0; }
-  h2 { font-size: 1.35rem; margin-bottom: 16px; letter-spacing: -0.01em; }
-  h2::before { content: "§ "; color: var(--accent); }
-  p + p { margin-top: 10px; }
-  .muted { color: var(--muted); }
-  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 22px;
+  .nav-in { display: flex; align-items: center; gap: 22px; height: 56px; }
+  .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1.02rem; text-decoration: none; color: var(--text); letter-spacing: -0.01em; }
+  .logo-dot { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); display: inline-block; }
+  nav .links { display: flex; gap: 4px; margin-left: auto; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: .88rem; padding: 6px 11px; border-radius: 8px; }
+  nav .links a:hover { color: var(--text); background: var(--bg-tint); }
+  @media (max-width: 640px) { nav .links { display: none; } }
+  .nav-cta { font-size: .85rem; font-weight: 600; color: #fff !important; background: var(--accent); padding: 7px 14px !important; border-radius: 9px !important; }
+  .nav-cta:hover { background: var(--accent-hover) !important; color: #fff !important; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 72px 0 56px; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: .8rem; font-weight: 600; color: var(--accent);
+    background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 20px;
   }
-  .card h3 { font-size: 1.1rem; margin-bottom: 4px; }
-  .card .sub { color: var(--muted); font-size: .9rem; margin-bottom: 14px; }
-  .card ul { margin: 0 0 16px 1.2em; font-size: .95rem; }
-  .card li { margin: 4px 0; }
-  pre {
-    background: var(--code-bg); color: var(--code-text);
-    border-radius: 10px; padding: 12px 14px; font-size: .85rem;
-    overflow-x: auto; line-height: 1.5;
+  h1 { font-size: clamp(1.9rem, 4.5vw, 2.9rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.2; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .hero p.lead { font-size: 1.12rem; color: var(--muted); max-width: 620px; margin: 18px 0 28px; }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* ---------- terminal ---------- */
+  .term {
+    background: var(--code-bg); border: 1px solid var(--code-edge);
+    border-radius: 14px; overflow: hidden; box-shadow: var(--shadow);
   }
-  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  p code, li code {
-    background: var(--accent-soft); color: var(--accent);
-    border-radius: 5px; padding: 1px 6px; font-size: .85em;
-  }
-  pre code { background: none; padding: 0; color: inherit; }
+  .term-bar { display: flex; align-items: center; gap: 7px; padding: 11px 15px; border-bottom: 1px solid var(--code-edge); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  .term-title { margin-left: 8px; font-size: .75rem; color: var(--code-dim); }
+  .term pre { padding: 18px 20px; font-size: .86rem; line-height: 1.65; color: var(--code-text); overflow-x: auto; }
+  .term .c-dim { color: var(--code-dim); }
+  .term .c-green { color: var(--code-green); }
+  .term .c-yellow { color: var(--code-yellow); }
+  .term .c-acc { color: var(--accent); }
+  .hero .term { margin-top: 44px; }
+
+  /* ---------- buttons ---------- */
   .btn {
-    display: inline-block; background: var(--accent); color: #fff;
-    text-decoration: none; font-weight: 600; font-size: .95rem;
-    padding: 9px 18px; border-radius: 9px; transition: opacity .15s;
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; text-decoration: none;
+    font-weight: 600; font-size: .95rem; padding: 11px 20px;
+    border-radius: 11px; transition: background .15s, transform .1s;
+    border: none; cursor: pointer;
   }
-  .btn:hover { opacity: .85; }
-  .btn.ghost {
-    background: transparent; color: var(--accent);
-    border: 1px solid var(--accent);
+  .btn:hover { background: var(--accent-hover); }
+  .btn:active { transform: scale(.98); }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+  .btn.ghost:hover { background: var(--accent-soft); }
+  .btn svg { flex: none; }
+
+  /* ---------- sections ---------- */
+  section { padding: 30px 0; scroll-margin-top: 72px; }
+  .sec-head { margin-bottom: 26px; }
+  .sec-head .no { font-size: .78rem; font-weight: 700; letter-spacing: .12em; color: var(--accent); text-transform: uppercase; }
+  h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; }
+  .sec-head p { color: var(--muted); margin-top: 6px; max-width: 640px; }
+
+  /* ---------- chip cards ---------- */
+  .chip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 680px) { .chip-grid { grid-template-columns: 1fr; } }
+  .chip-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 26px; box-shadow: var(--shadow); display: flex; flex-direction: column;
   }
-  .btnrow { display: flex; gap: 10px; flex-wrap: wrap; }
-  .hash { font-size: .75rem; color: var(--muted); margin-top: 12px; word-break: break-all; }
-  table { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--card); border-radius: 12px; overflow: hidden; }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
-  th { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  tr:last-child td { border-bottom: none; }
+  .chip-icon {
+    width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft);
+    color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
+  }
+  .chip-card h3 { font-size: 1.12rem; letter-spacing: -0.01em; }
+  .chip-card .sub { color: var(--muted); font-size: .88rem; margin: 3px 0 14px; }
+  .chip-card ul { list-style: none; margin-bottom: 18px; }
+  .chip-card li { font-size: .92rem; padding: 5px 0 5px 24px; position: relative; }
+  .chip-card li::before { content: "✓"; position: absolute; left: 2px; color: var(--ok); font-weight: 700; }
+  .chip-card .btn { margin-top: auto; align-self: flex-start; }
+  .chip-card .hash { font-size: .72rem; color: var(--faint); margin-top: 14px; word-break: break-all; line-height: 1.6; }
+  .chip-card .hash b { color: var(--muted); font-weight: 600; }
+
+  /* ---------- steps ---------- */
+  .steps { position: relative; }
+  .step {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 28px; margin-bottom: 18px;
+  }
+  .step-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .step-no {
+    font-size: .8rem; font-weight: 700; color: var(--accent);
+    background: var(--accent-soft); border-radius: 8px; padding: 3px 10px; white-space: nowrap;
+  }
+  .step h3 { font-size: 1.15rem; letter-spacing: -0.01em; }
+  .step .why { color: var(--muted); font-size: .93rem; margin-bottom: 14px; }
+  .step .why b { color: var(--text); font-weight: 600; }
+  .step pre {
+    background: var(--code-bg); color: var(--code-text);
+    border: 1px solid var(--code-edge); border-radius: 11px;
+    padding: 14px 16px; font-size: .84rem; line-height: 1.7; overflow-x: auto; position: relative;
+  }
+  .step .c-dim { color: var(--code-dim); } .step .c-green { color: var(--code-green); }
+  .step .c-yellow { color: var(--code-yellow); } .step .c-acc { color: var(--accent); }
+  .copy {
+    position: absolute; top: 8px; right: 8px;
+    font-size: .72rem; font-weight: 600; color: var(--code-dim);
+    background: transparent; border: 1px solid var(--code-edge);
+    border-radius: 7px; padding: 4px 10px; cursor: pointer; transition: all .15s;
+  }
+  .copy:hover { color: var(--code-text); border-color: var(--code-dim); }
+  .copy.done { color: var(--code-green); border-color: var(--code-green); }
+  .tip {
+    display: flex; gap: 10px; font-size: .88rem; color: var(--muted);
+    background: var(--bg-tint); border-radius: 10px; padding: 12px 16px; margin-top: 14px;
+  }
+  .tip .ic { flex: none; margin-top: 2px; }
+  .tip.warn { background: var(--warn-bg); }
+  .tip.warn .ic { color: var(--warn); }
+  .tip b { color: var(--text); }
+
+  /* ---------- feature grid ---------- */
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 680px) { .feat-grid { grid-template-columns: 1fr; } }
+  .feat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .feat .fi { color: var(--accent); margin-bottom: 10px; }
+  .feat h4 { font-size: .98rem; margin-bottom: 4px; letter-spacing: -0.01em; }
+  .feat p { font-size: .85rem; color: var(--muted); line-height: 1.65; }
+
+  /* ---------- table & notes ---------- */
+  .judge { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .judge table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  .judge th { text-align: left; padding: 13px 20px; font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); }
+  .judge td { padding: 13px 20px; border-top: 1px solid var(--line); vertical-align: top; }
+  .judge td:first-child { white-space: nowrap; }
+  .judge td code { font-size: .8rem; background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 1px 6px; }
+  @media (max-width: 640px) { .judge td:first-child { white-space: normal; } }
   .note {
-    background: var(--card); border-left: 3px solid var(--warn);
-    border-radius: 8px; padding: 14px 18px; margin-top: 16px; font-size: .93rem;
+    border-radius: 12px; padding: 16px 20px; margin-top: 16px; font-size: .92rem;
+    border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--card);
   }
-  .note.ok { border-left-color: var(--ok); }
-  ol { margin-left: 1.4em; }
-  ol li { margin: 8px 0; }
-  footer { margin: 64px 0 40px; color: var(--muted); font-size: .85rem; text-align: center; }
-  footer a { color: var(--accent); text-decoration: none; }
+  .note b { letter-spacing: -0.01em; }
+  .note.amber { border-left-color: var(--warn); }
+  .note.green { border-left-color: var(--ok); }
+  .note + .note { margin-top: 12px; }
+
+  /* ---------- faq ---------- */
+  details {
+    background: var(--card); border: 1px solid var(--line); border-radius: 13px;
+    box-shadow: var(--shadow); margin-bottom: 10px; overflow: hidden;
+  }
+  summary { cursor: pointer; padding: 16px 20px; font-weight: 600; font-size: .96rem; list-style: none; display: flex; align-items: center; gap: 10px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "+"; color: var(--accent); font-weight: 700; font-size: 1.1rem; width: 18px; flex: none; transition: transform .15s; }
+  details[open] summary::before { transform: rotate(45deg); }
+  details .body { padding: 0 20px 18px 48px; color: var(--muted); font-size: .92rem; }
+  details .body code { background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 1px 6px; font-size: .82rem; }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 32px 0 44px; text-align: center; color: var(--faint); font-size: .84rem; }
+  footer a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); }
+  footer a:hover { color: var(--accent); }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-<header>
-  <h1>macbench<span class="v">.</span></h1>
-  <p class="tagline">Mac 电池状态性能对比跑分 —— 检测「坏电池拖慢整台电脑」</p>
-  <div class="badges">
-    <span class="badge">零依赖 · 只用 macOS 自带工具</span>
-    <span class="badge">开源 · 源码明文可审阅</span>
-    <span class="badge">不联网 · 不改系统设置</span>
+<nav>
+  <div class="wrap nav-in">
+    <a class="logo" href="#top"><span class="logo-dot"></span>macbench</a>
+    <div class="links">
+      <a href="#choose">选版本</a>
+      <a href="#guide">使用教程</a>
+      <a href="#judge">结果判读</a>
+      <a href="#faq">常见问题</a>
+    </div>
+    <a class="links nav-cta" href="#choose" style="margin-left:auto">开始使用</a>
   </div>
-</header>
+</nav>
 
-<section>
-  <h2>这是什么</h2>
-  <p>电池故障的 Mac 即使插着充电器,macOS 也可能认为供电能力不足,把 CPU
-  限速到 50% 甚至更低、禁用睿频。本工具把<b>系统自报告的限速状态</b>和
-  <b>实际计算性能跑分</b>放在同一次运行里记录,在换电池前后各跑一次并对比,
-  就能用数据回答:「我的 Mac 变慢,是不是电池造成的?」</p>
-</section>
+<div class="wrap" id="top">
 
-<section>
-  <h2>我该下载哪个脚本</h2>
-  <p>在「终端」里执行:</p>
-  <pre><code>sysctl -n machdep.cpu.brand_string</code></pre>
-  <p>输出以 <code>Apple M</code> 开头(M1/M2/M3/M4)→ 下载 <b>Apple Silicon 版</b>;
-  否则(i5 / i7 / i9 等)→ 下载 <b>Intel 版</b>。选错了脚本会直接拒绝运行并提示,不会跑错。</p>
-</section>
+<!-- ============ HERO ============ -->
+<div class="hero">
+  <span class="kicker">🔒 纯本地运行 · 零依赖 · 不联网</span>
+  <h1>你的 Mac 变慢,<br>可能只是<em>电池坏了</em>。</h1>
+  <p class="lead">macbench 是一个开源跑分脚本:电池故障的 Mac 即使插着充电器,macOS 也可能把 CPU 限速一半。在换电池前后各跑一次,用数据确认真相。</p>
+  <div class="hero-actions">
+    <a class="btn" href="#choose">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载脚本
+    </a>
+    <a class="btn ghost" href="#guide">查看图文教程</a>
+  </div>
 
-<section>
-  <h2>下载</h2>
-  <div class="cards">
-    <div class="card">
-      <h3>🍎 Apple Silicon 版</h3>
-      <div class="sub">M1 / M2 / M3 / M4 · 约 20 KB</div>
+  <figure class="term">
+    <div class="term-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="term-title">换电池前 vs 换电池后 —— 一次 compare 的真实输出</span>
+    </div>
+<pre><span class="c-dim">$</span> ./macbench-apple.sh compare results/result_坏电池.txt results/result_换电池后.txt
+
+<span class="c-dim">================ macbench-apple 对比结果 ================</span>
+项目                第一次       第二次    比值(二/一)
+<span class="c-dim">---------------------------------------------------</span>
+单核分数            240.0       <span class="c-green">480.0</span>      <span class="c-yellow">0.50</span>  ← 性能被限一半
+全核分数           1377.0      <span class="c-green">2754.0</span>      <span class="c-yellow">0.49</span>
+内存带宽            49.85       49.12       0.98
+<span class="c-dim">---------------------------------------------------</span>
+CPU_SPEED_LIMIT: 坏电池时 <span class="c-yellow">50</span> → 换电池后 <span class="c-green">100</span></pre>
+  </figure>
+</div>
+
+<!-- ============ CHOOSE ============ -->
+<section id="choose">
+  <div class="sec-head">
+    <span class="no">STEP 0</span>
+    <h2>先确认你的 Mac 是哪种芯片</h2>
+    <p>两个版本针对两种架构分别设计,选错时脚本会拒绝运行并提示,不会跑错。</p>
+  </div>
+
+  <div class="chip-grid">
+    <div class="chip-card">
+      <div class="chip-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+      </div>
+      <h3>Apple Silicon 版</h3>
+      <div class="sub">适用于 M1 / M2 / M3 / M4 · 20 KB</div>
       <ul>
-        <li>性能核 / 能效核拓扑识别</li>
-        <li>30 秒<b>持续性能曲线</b>(区分「一直被限」和「跑久才降」)</li>
+        <li>识别性能核(P)/能效核(E)拓扑</li>
+        <li>30 秒持续性能曲线,区分「一直被限」和「跑久才降」</li>
         <li>QoS 调度优先派发性能核</li>
       </ul>
-      <div class="btnrow">
-        <a class="btn" href="macbench-apple.sh" download>下载 macbench-apple.sh</a>
-      </div>
-      <p class="hash">SHA256<br>8b3f1a3ae767ae8ae3a0e53dce79f5349254c8a33ea61461f6a9f168a41d354f</p>
+      <a class="btn" href="macbench-apple.sh" download>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载 macbench-apple.sh
+      </a>
+      <p class="hash"><b>SHA256</b><br>8b3f1a3ae767ae8ae3a0e53dce79f5349254c8a33ea61461f6a9f168a41d354f</p>
     </div>
-    <div class="card">
-      <h3>💻 Intel 版</h3>
-      <div class="sub">Intel Core 芯片的 Mac · 约 15 KB</div>
+
+    <div class="chip-card">
+      <div class="chip-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <h3>Intel 版</h3>
+      <div class="sub">适用于 Intel Core 芯片的 Mac · 15 KB</div>
       <ul>
         <li>标称 / 睿频频率基准对照</li>
-        <li>--freq 读取实际运行频率</li>
+        <li>--freq 读取满载实际频率</li>
         <li>XCPM 热节流等级观测</li>
       </ul>
-      <div class="btnrow">
-        <a class="btn" href="macbench-intel.sh" download>下载 macbench-intel.sh</a>
-      </div>
-      <p class="hash">SHA256<br>30b33a63160ab5981d858ee34fc7d8c1caa43cb95b7a36edd25c306e4620e03b</p>
+      <a class="btn" href="macbench-intel.sh" download>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载 macbench-intel.sh
+      </a>
+      <p class="hash"><b>SHA256</b><br>30b33a63160ab5981d858ee34fc7d8c1caa43cb95b7a36edd25c306e4620e03b</p>
     </div>
   </div>
-  <div class="note" style="margin-top:16px">
-    也可以用 <b>curl</b> 直接下载(复制到终端执行):<br>
-    <pre style="margin-top:8px"><code># Apple Silicon (M1/M2/M3/M4)
-curl -fLO https://macbench.pages.dev/macbench-apple.sh
 
-# Intel
-curl -fLO https://macbench.pages.dev/macbench-intel.sh</code></pre>
+  <div class="tip" style="margin-top:16px">
+    <span class="ic">👉</span>
+    <span><b>怎么确认?</b>在下方教程第 1 步有一条命令,输出以 <code>Apple M</code> 开头 → 用 Apple 版;输出是 i5 / i7 / i9 等 → 用 Intel 版。不想敲命令的话:<b>2020 年底之后买的 MacBook 基本都是 Apple Silicon 版</b>。</span>
   </div>
 </section>
 
-<section>
-  <h2>使用方法</h2>
-  <ol>
-    <li>关掉浏览器、聊天软件等可关的程序,插好充电器;
-    <li><code>chmod +x macbench-apple.sh</code> 然后运行 <code>./macbench-apple.sh</code>(约 1 分钟,可选 <code>--freq</code> 需输密码);
-    <li>给这次测试起个名字,例如「坏电池接电源」;
-    <li><b>换电池之后</b>,在同样条件下再跑一次,命名如「换新电池后」;
-    <li>对比两次结果:
-    <pre style="margin-top:8px"><code>./macbench-apple.sh compare results/result_旧.txt results/result_新.txt</code></pre></li>
-  </ol>
-</section>
-
-<section>
-  <h2>如何判读结果</h2>
-  <table>
-    <tr><th>现象</th><th>结论</th></tr>
-    <tr><td>单核/多核比值 ≈ 0.50</td><td>性能被限制了一半,典型的无电池降频</td></tr>
-    <tr><td>多核比值明显低于单核比值</td><td>睿频被禁用,或部分核心被限制</td></tr>
-    <tr><td><code>CPU_SPEED_LIMIT &lt; 100</code></td><td><b>强证据</b>:macOS 明确报告了主动限速</td></tr>
-    <tr><td>内存带宽比值 ≈ 1.0</td><td>内存未被限制(正常,降频主要影响 CPU)</td></tr>
-    <tr><td>所有比值 ≈ 1.0 且无限速</td><td>两种状态性能无差别</td></tr>
-  </table>
-  <div class="note">
-    <b>严谨说明:</b><code>CPU_Speed_Limit &lt; 100</code> 是 macOS 自我报告的主动限速,属于强证据;
-    但反过来不成立 —— 该字段缺失或为 100% 时,<b>不能单独排除</b>其他形式的功耗/温度/频率管理。
-    Apple 版的持续性能曲线(<code>SUSTAIN_MIN_RATIO</code>)和 <code>--freq</code> 实际频率就是用来交叉验证的。
+<!-- ============ GUIDE ============ -->
+<section id="guide">
+  <div class="sec-head">
+    <span class="no">TUTORIAL</span>
+    <h2>图文教程:从下载到出报告</h2>
+    <p>每一步都可以直接复制粘贴。全程约 1 分钟,不需要安装任何软件。</p>
   </div>
-  <div class="note">
-    <b>关于小幅差异:</b>分数有正常运行间波动,比值在 0.95~1.05 之间建议视为噪声。
-    像「正常 100 vs 异常 94」这种 -6% 的差异,需要先在同一状态连跑两次确认测试稳定后再下结论。
-    真正有意义的证据是数量级差异(如 100 → 51)配合系统自报告的限速字段。
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">第 1 步</span><h3>打开「终端」,确认芯片型号</h3></div>
+      <p class="why"><b>终端</b>在哪里?按 <b>⌘ + 空格</b> 打开聚焦搜索,输入 <b>终端</b> 或 <b>Terminal</b>,回车打开。把下面这行粘贴进去(⌘+V),按回车:</p>
+      <pre><span class="c-dim">$</span> sysctl -n machdep.cpu.brand_string
+<span class="c-green">Apple M1</span>   <span class="c-dim">← 以 "Apple M" 开头:用 Apple 版(下面都以此为例)</span>
+<span class="c-dim">  (如果显示 Intel Core i5 / i7 等:改用 macbench-intel.sh,步骤完全一样)</span>
+<button class="copy" data-copy="sysctl -n machdep.cpu.brand_string">复制</button></pre>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">第 2 步</span><h3>下载脚本(终端里一行搞定)</h3></div>
+      <p class="why">继续在终端里粘贴回车。下载的文件在你的<b>「下载」文件夹</b>(也可以直接点上面下载按钮,效果相同)。</p>
+      <pre><span class="c-dim">$</span> curl -fLO https://macbench.pages.dev/macbench-apple.sh
+<span class="c-dim"># Intel 用户请改用:</span>
+<span class="c-dim"># curl -fLO https://macbench.pages.dev/macbench-intel.sh</span>
+<button class="copy" data-copy="curl -fLO https://macbench.pages.dev/macbench-apple.sh">复制</button></pre>
+      <div class="tip">
+        <span class="ic">💡</span>
+        <span>下载完可以校验一下完整性(可选):<code>shasum -a 256 macbench-apple.sh</code>,结果应和上面卡片里的 SHA256 一致。</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">第 3 步</span><h3>进入下载目录,给脚本执行权限</h3></div>
+      <p class="why">macOS 出于安全考虑,新下载的脚本默认不允许直接运行,需要先<b>解锁</b>(只需做一次):</p>
+      <pre><span class="c-dim">$</span> cd ~/Downloads
+<span class="c-dim">$</span> chmod +x macbench-apple.sh
+<button class="copy" data-copy="cd ~/Downloads
+chmod +x macbench-apple.sh">复制</button></pre>
+      <div class="tip warn">
+        <span class="ic">⚠️</span>
+        <span>如果这里报错 <b>command not found</b> 或 <b>No such file</b>:说明文件名对不上。在终端输入 <code>ls ~/Downloads</code> 看一眼实际文件名(比如浏览器存成了 <code>macbench-apple (1).sh</code> 或 <code>.txt</code> 结尾),按实际名字改上面命令即可。</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">第 4 步</span><h3>跑第一次测试(约 1 分钟)</h3></div>
+      <p class="why">跑之前请<b>关掉浏览器、聊天软件等可关的程序</b>,插好充电器。然后:</p>
+      <pre><span class="c-dim">$</span> ./macbench-apple.sh
+<button class="copy" data-copy="./macbench-apple.sh">复制</button></pre>
+      <p class="why" style="margin-top:14px">运行中会发生什么:</p>
+      <ol style="margin:0 0 4px 1.4em; font-size:.93rem">
+        <li>显示机型、芯片、核心信息;</li>
+        <li>请你给测试<b>起个名字</b> —— 比如「坏电池接电源」,直接回车跳过也行;</li>
+        <li>读取电池健康、限速状态;</li>
+        <li>依次跑单核、全核、内存、30 秒持续曲线,<b>期间别碰电脑</b>;</li>
+        <li>结果自动保存在 <code>results/</code> 文件夹里,屏幕上会直接显示分数。</li>
+      </ol>
+      <div class="tip">
+        <span class="ic">💡</span>
+        <span>想看更深的证据?加一个 <code>--freq</code> 参数(需要输一次开机密码),用系统官方的 <code>powermetrics</code> 只读工具看实际运行频率:<code>./macbench-apple.sh --freq</code></span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">第 5 步</span><h3>换电池后,再跑一次并对比</h3></div>
+      <p class="why"><b>换完电池后</b>,在尽量相同的条件下(同样插电源、同样关掉其他程序)重复第 4 步,这次起名「换新电池后」。然后用 compare 对比两次结果 —— 把命令里的文件名换成你自己的:</p>
+      <pre><span class="c-dim">$</span> ./macbench-apple.sh compare \
+      results/result_20260915_200415.txt \
+      results/result_20260920_150000.txt
+<span class="c-dim">                                            ↑ 旧文件        ↑ 新文件
+   (文件名在 results/ 文件夹里找,输入 results/ 后按 Tab 可以自动补全)</span>
+<button class="copy" data-copy="./macbench-apple.sh compare ">复制</button></pre>
+      <p class="why">对比结果怎么看?往下翻到「结果判读」一节。</p>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">卡住了?</span><h3>常见报错速查</h3></div>
+      <pre><span class="c-yellow">「无法打开,因为无法验证开发者」</span>
+<span class="c-dim">$</span> xattr -d com.apple.quarantine ~/Downloads/macbench-apple.sh
+<span class="c-dim">  (去掉 macOS 给下载文件加的隔离标记;脚本源码是明文,可先打开审阅)</span>
+
+<span class="c-yellow">「Permission denied」</span>
+<span class="c-dim">$</span> chmod +x macbench-apple.sh   <span class="c-dim">← 第 3 步漏了,补上即可</span>
+
+<span class="c-yellow">「本机不是 Apple Silicon Mac」</span>
+<span class="c-dim">  你的 Mac 是 Intel 芯片,请下载 macbench-intel.sh,命令全部相同</span></pre>
+    </div>
+
   </div>
 </section>
 
-<section>
-  <h2>安全性</h2>
-  <ul style="margin-left:1.4em">
-    <li>不安装任何软件,只用 macOS 自带的 <code>cc</code>、<code>pmset</code>、<code>ioreg</code>、<code>sysctl</code> 等系统工具;</li>
-    <li>唯一需要密码的是可选 <code>--freq</code> 模式,用 sudo 运行官方只读采样工具 <code>powermetrics</code>;</li>
-    <li>不联网、不修改任何系统设置,只写入脚本目录下的 <code>results/</code> 和系统临时目录(自动清理);</li>
-    <li>测试程序源码以明文嵌在脚本里,下载后可自行审阅,SHA256 校验值见上方。</li>
-  </ul>
+<!-- ============ FEATURES ============ -->
+<section id="what">
+  <div class="sec-head">
+    <span class="no">METRICS</span>
+    <h2>它测什么</h2>
+  </div>
+  <div class="feat-grid">
+    <div class="feat">
+      <div class="fi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></div>
+      <h4>单核 / 全核性能</h4>
+      <p>混合浮点+整数负载,固定时间统计迭代数,Apple 版用 QoS 优先派发性能核。</p>
+    </div>
+    <div class="feat">
+      <div class="fi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <h4>持续性能曲线</h4>
+      <p>Apple 版独有:满载 30 秒分段统计吞吐量,区分「一直被限速」和「跑久才降频」。</p>
+    </div>
+    <div class="feat">
+      <div class="fi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg></div>
+      <h4>内存带宽</h4>
+      <p>256 MB 缓冲区反复拷贝测 GB/s。降频主要影响 CPU,内存不变可以交叉验证。</p>
+    </div>
+    <div class="feat">
+      <div class="fi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
+      <h4>系统限速状态</h4>
+      <p>读 pmset 自报告的 CPU_Speed_Limit:&lt;100 是「系统主动限速」的直接强证据。</p>
+    </div>
+    <div class="feat">
+      <div class="fi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="13" x2="23" y2="11"/><polygon points="10 9 15 12 10 15 10 9" fill="currentColor" stroke="none"/></svg></div>
+      <h4>电池健康</h4>
+      <p>循环次数、当前容量 / 设计容量百分比、永久故障标记,一并写进结果文件。</p>
+    </div>
+    <div class="feat">
+      <div class="fi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
+      <h4>实际频率(--freq)</h4>
+      <p>用官方只读工具 powermetrics 看 P/E 集群实际频率与功耗,需要输一次密码。</p>
+    </div>
+  </div>
 </section>
 
-<section>
-  <h2>常见问题</h2>
-  <p><b>Q: M 系列上没有「标称最高频率」显示?</b><br>
-  Apple Silicon 不提供该系统值,Apple 版因此改用 P/E 拓扑 + 持续曲线 + 实际频率来判断,不依赖这个字段。</p>
-  <p><b>Q: 跑分和对比是同一台机器才有效吗?</b><br>
-  是。分数只用于同一台机器前后对比,跨机器比较没有意义。</p>
-  <p><b>Q: 为什么不用 Geekbench?</b><br>
-  Geekbench 更全面,但需要下载安装、分数受版本影响、不易脚本化对比。本脚本把限速状态和跑分绑定记录,直接输出比值。</p>
+<!-- ============ JUDGE ============ -->
+<section id="judge">
+  <div class="sec-head">
+    <span class="no">INTERPRETATION</span>
+    <h2>结果判读</h2>
+    <p>分数只用于<b>同一台机器</b>换电池前后对比,跨机器比较没有意义。</p>
+  </div>
+  <div class="judge">
+    <table>
+      <tr><th style="width:46%">现象</th><th>结论</th></tr>
+      <tr><td>单核/多核比值 ≈ 0.50</td><td>性能被限制一半,典型的无电池降频</td></tr>
+      <tr><td>多核比值明显低于单核比值</td><td>睿频被禁用,或部分核心被限制</td></tr>
+      <tr><td><code>CPU_SPEED_LIMIT &lt; 100</code></td><td><b>强证据</b>:macOS 明确报告了主动限速</td></tr>
+      <tr><td>内存带宽比值 ≈ 1.0</td><td>内存未被限制(正常现象)</td></tr>
+      <tr><td>所有比值 ≈ 1.0 且无限速</td><td>两种状态性能无差别</td></tr>
+    </table>
+  </div>
+  <div class="note green">
+    <b>✓ 可以放心下结论的情况:</b>像「正常 100 → 异常 51」这样数量级的差异,
+    配合 <code>CPU_SPEED_LIMIT &lt; 100</code>,基本可以确认电池故障拖慢了整机。
+  </div>
+  <div class="note amber">
+    <b>⚠ 两个容易误读的地方:</b><br>
+    ① <code>CPU_Speed_Limit &lt; 100</code> 是强证据,但反过来<b>不成立</b> —— 字段缺失或为 100%
+    时不能单独排除其他形式的频率管理,请配合持续曲线(SUSTAIN_MIN_RATIO)和 --freq 实际频率交叉验证;<br>
+    ② 分数有正常波动,比值在 <b>0.95~1.05</b> 之间建议视为噪声。
+    像「正常 100 vs 异常 94」的 -6% 差异,需要先在同一状态连跑两次确认测试稳定后再下结论。
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section id="faq">
+  <div class="sec-head">
+    <span class="no">FAQ</span>
+    <h2>常见问题</h2>
+  </div>
+  <details>
+    <summary>这个脚本安全吗?会不会乱改我的系统?</summary>
+    <div class="body">不联网、不修改任何系统设置。只用 macOS 自带的 cc、pmset、ioreg、sysctl 等系统工具;唯一需要密码的是可选 --freq 模式(运行官方只读采样工具 powermetrics)。只写入脚本目录下的 results/ 和自动清理的系统临时目录。测试程序源码明文嵌在脚本里,可以先用文本编辑器打开审阅再运行。</div>
+  </details>
+  <details>
+    <summary>M 系列上为什么不显示「标称最高频率」?</summary>
+    <div class="body">Apple Silicon 不提供 hw.cpufrequency_max 这个系统值,是平台特性不是缺陷。Apple 版因此改用 P/E 核心拓扑 + 持续性能曲线 + --freq 实际频率来判断,不依赖这个字段。</div>
+  </details>
+  <details>
+    <summary>为什么要拆成两个脚本?</summary>
+    <div class="body">两套架构的频率管理机制完全不同:Intel 可以直接观察「限速 → 频率下降 → 分数下降」的对应链路;Apple Silicon 没有标称 MHz,核心异构(P/E),需要 QoS 调度和持续性能曲线才能看清真实性能。一个脚本同时兼容两者会让指标解释变得含糊。</div>
+  </details>
+  <details>
+    <summary>为什么不用 Geekbench?</summary>
+    <div class="body">Geekbench 更全面,但需要下载安装、分数受版本影响、不易脚本化对比。macbench 针对同一台机器换电池前后的对比场景定制:把限速状态和跑分绑定记录,直接输出比值。</div>
+  </details>
+  <details>
+    <summary>测试时必须插着电源吗?</summary>
+    <div class="body">对比「坏电池接电源」和「换电池后接电源」时,两次都插电源、条件一致即可。如果单独想测电池供电的性能,脚本也会记录供电状态,但注意苹果对电池供电本身也有性能管理策略。</div>
+  </details>
 </section>
 
 <footer>
-  macbench · 零依赖的 Mac 电池性能对比工具 ·
-  源码同时托管在 <a href="https://github.com/lovexw/macbench" rel="noopener">GitHub</a>(大陆访问不畅时请用本站直链)
+  macbench · 零依赖开源工具 · 源码托管于 <a href="https://github.com/lovexw/macbench" rel="noopener">GitHub</a><br>
+  大陆访问 GitHub 不畅时,请直接使用本站下载链接 · SHA256 校验值见下载卡片
 </footer>
 
 </div>
+
+<script>
+  document.querySelectorAll('.copy').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var text = btn.dataset.copy || '';
+      var done = function() {
+        btn.textContent = '已复制 ✓'; btn.classList.add('done');
+        setTimeout(function() { btn.textContent = '复制'; btn.classList.remove('done'); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta); done();
+      }
+    });
+  });
+</script>
 </body>
 </html>
